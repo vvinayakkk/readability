@@ -1662,32 +1662,47 @@ Readability.prototype = {
   _getJSONLD(doc) {
     var candidates = [];
     var schema = /^https?:\/\/schema\.org\/?$/;
-    function isSchema(context) {
+    function isSchema(context, inheritedSchema = false) {
       if (Array.isArray(context)) {
-        return context.some(isSchema);
+        // Context entries apply in order; later vocabularies replace earlier ones.
+        return context.reduce(
+          (activeSchema, entry) => isSchema(entry, activeSchema),
+          inheritedSchema
+        );
       }
-      return typeof context === "string"
-        ? schema.test(context)
-        : !!context &&
-            typeof context === "object" &&
-            typeof context["@vocab"] === "string" &&
-            schema.test(context["@vocab"]);
+      if (typeof context === "string") {
+        // Remote contexts are not fetched. Only known Schema.org URLs qualify.
+        return schema.test(context);
+      }
+      if (!context || typeof context !== "object") {
+        return false;
+      }
+      if (Object.prototype.hasOwnProperty.call(context, "@vocab")) {
+        return (
+          typeof context["@vocab"] === "string" &&
+          schema.test(context["@vocab"])
+        );
+      }
+      // Language and term definitions do not replace the active vocabulary.
+      return inheritedSchema;
     }
-    var collect = (node, inheritedContext) => {
+    var collect = (node, inheritedSchema = false) => {
       if (Array.isArray(node)) {
-        node.forEach(item => collect(item, inheritedContext));
+        node.forEach(item => collect(item, inheritedSchema));
         return;
       }
       if (!node || typeof node !== "object") {
         return;
       }
-      var context =
-        node["@context"] === undefined ? inheritedContext : node["@context"];
-      if (isSchema(context) && this._jsonLdTypeMatches(node["@type"])) {
+      var schemaContext =
+        node["@context"] === undefined
+          ? inheritedSchema
+          : isSchema(node["@context"], inheritedSchema);
+      if (schemaContext && this._jsonLdTypeMatches(node["@type"])) {
         candidates.push(node);
       }
       if (Array.isArray(node["@graph"])) {
-        collect(node["@graph"], context);
+        collect(node["@graph"], schemaContext);
       }
     };
     this._forEachNode(this._getAllNodesWithTag(doc, ["script"]), script => {

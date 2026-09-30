@@ -65,7 +65,12 @@ var article = new Readability(documentClone).parse();
 
 Unless `disableJSONLD` is set, Readability collects Schema.org entities with a
 non-empty string type (including types in an `@type` array) from JSON-LD scripts,
-top-level arrays, and `@graph` arrays. It selects one entity's metadata:
+top-level arrays, and `@graph` arrays. Context array entries apply in order:
+a later `@vocab` replaces the active vocabulary, and `null` resets it. Language
+and term definitions preserve the inherited vocabulary, including in graph
+children. Remote contexts are not fetched; an unrecognized context URL is
+conservatively treated as non-Schema.org until a later supported context
+establishes Schema.org again. It selects one entity's metadata:
 
 1. The first entity with a non-empty string `datePublished` whose
    `mainEntityOfPage` matches the document URL or a canonical link.

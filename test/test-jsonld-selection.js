@@ -284,6 +284,71 @@ describe("JSON-LD candidate selection", function () {
     ]);
     expect(result.title).to.equal(recipe.name);
   });
+  for (const [context, acceptsSchema] of [
+    [[schema, { "@vocab": "https://example.com/" }], false],
+    [[{ "@vocab": schema }, { "@vocab": "https://example.com/" }], false],
+    [[schema, { "@vocab": null }], false],
+    [[schema, null, { "@language": "en" }], false],
+    [[schema, "https://example.com/context"], false],
+    [[{ "@vocab": "https://example.com/" }, schema], true],
+    [
+      [schema, { "@vocab": "https://example.com/" }, { "@vocab": schema }],
+      true,
+    ],
+    [[schema, null, schema], true],
+    [[schema, { label: "https://example.com/label" }], true],
+    [
+      [schema, { "@language": "en" }, { label: "https://example.com/label" }],
+      true,
+    ],
+    [[schema, {}], true],
+  ]) {
+    it(
+      "applies context entries in order: " + JSON.stringify(context),
+      function () {
+        const result = extract([{ ...recipe, "@context": context }]);
+        expect(result.publishedTime).to.equal(
+          acceptsSchema ? recipe.datePublished : null
+        );
+      }
+    );
+  }
+  for (const [context, acceptsSchema] of [
+    [{ "@language": "en" }, true],
+    [{ label: "https://example.com/label" }, true],
+    [{ "@vocab": "https://example.com/" }, false],
+    [[{ "@language": "en" }, { "@vocab": null }], false],
+  ]) {
+    it(
+      "applies a graph child's context to the inherited vocabulary: " +
+        JSON.stringify(context),
+      function () {
+        const result = extract([
+          {
+            "@context": schema,
+            "@graph": [{ ...recipe, "@context": context }],
+          },
+        ]);
+        expect(result.publishedTime).to.equal(
+          acceptsSchema ? recipe.datePublished : null
+        );
+      }
+    );
+  }
+  it("skips a foreign-context candidate before a valid dated recipe", function () {
+    const result = extract([
+      {
+        ...recipe,
+        "@context": [schema, { "@vocab": "https://example.com/" }],
+        name: "Unrelated entity",
+        datePublished: "2000-01-01",
+        mainEntityOfPage: page,
+      },
+      recipe,
+    ]);
+    expect(result.title).to.equal(recipe.name);
+    expect(result.publishedTime).to.equal(recipe.datePublished);
+  });
   it("uses JSON-LD dates ahead of HTML dates", function () {
     expect(
       extract(
